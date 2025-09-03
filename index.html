@@ -710,6 +710,25 @@
             cursor: pointer;
             font-size: 20px;
         }
+
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a1f2e;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -1087,6 +1106,9 @@
         </div>
     </div>
 
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
     <!-- Bottom Navigation -->
     <div class="nav-bottom">
         <div class="nav-item active" onclick="showPage('dashboard-page')">
@@ -1149,12 +1171,39 @@
             return Math.random().toString(36).substring(2, 10).toUpperCase();
         }
         
+        // Show toast notification
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+        
         // Initialize on page load
         window.onload = function() {
             initUserData();
             generateChart();
             setInterval(animateChart, 2000);
             updateReferralLink();
+            
+            // Check for referral parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const refCode = urlParams.get('ref');
+            
+            if (refCode) {
+                // Store the referral code for when the user registers
+                localStorage.setItem('pending_ref_code', refCode);
+                
+                // If user is already logged in, process the referral immediately
+                if (currentUser) {
+                    processReferral(refCode, currentUser.email);
+                } else {
+                    showToast('Referral code detected! It will be applied when you register.');
+                }
+            }
         };
         
         // Show/hide pages
@@ -1193,6 +1242,12 @@
                 document.getElementById('register-tab').classList.add('active');
                 document.getElementById('login-form').classList.add('hidden');
                 document.getElementById('register-form').classList.remove('hidden');
+                
+                // Check if there's a pending referral code
+                const pendingRefCode = localStorage.getItem('pending_ref_code');
+                if (pendingRefCode) {
+                    document.getElementById('ref-code').value = pendingRefCode;
+                }
             }
         }
         
@@ -1235,7 +1290,9 @@
         // Update referral link
         function updateReferralLink() {
             if (currentUser) {
-                document.getElementById('ref-link').value = `https://fxchris.com/ref/${currentUser.referralCode}`;
+                // Use the current URL as base for the referral link
+                const baseUrl = window.location.origin + window.location.pathname;
+                document.getElementById('ref-link').value = `${baseUrl}?ref=${currentUser.referralCode}`;
             }
         }
         
@@ -1244,7 +1301,7 @@
             if (currentUser.balance >= 2) {
                 showPage('withdraw-page');
             } else {
-                alert("You need at least $2 to withdraw. Refer friends to earn more.");
+                showToast("You need at least $2 to withdraw. Refer friends to earn more.");
                 showPage('withdraw-page');
             }
         }
@@ -1257,18 +1314,18 @@
             const refCode = document.getElementById('ref-code').value;
             
             if (!email || !password || !confirmPassword) {
-                alert("Please fill in all fields");
+                showToast("Please fill in all fields");
                 return;
             }
             
             if (password !== confirmPassword) {
-                alert("Passwords do not match");
+                showToast("Passwords do not match");
                 return;
             }
             
             // Check if user already exists
             if (allUsers[email]) {
-                alert("An account with this email already exists. Please login instead.");
+                showToast("An account with this email already exists. Please login instead.");
                 switchAuthTab('login');
                 return;
             }
@@ -1297,8 +1354,9 @@
                 processReferral(refCode, email);
             }
             
-            alert("Account created successfully!");
+            showToast("Account created successfully!");
             updateUserDisplay();
+            updateReferralLink();
             showPage('dashboard-page');
         }
         
@@ -1308,20 +1366,20 @@
             const password = document.getElementById('login-password').value;
             
             if (!email || !password) {
-                alert("Please fill in all fields");
+                showToast("Please fill in all fields");
                 return;
             }
             
             // Check if user exists
             if (!allUsers[email]) {
-                alert("No account found with this email. Please register instead.");
+                showToast("No account found with this email. Please register instead.");
                 switchAuthTab('register');
                 return;
             }
             
             // Check password
             if (allUsers[email].password !== password) {
-                alert("Incorrect password. Please try again.");
+                showToast("Incorrect password. Please try again.");
                 return;
             }
             
@@ -1329,8 +1387,9 @@
             currentUser = allUsers[email];
             localStorage.setItem('fxchris_current_user', JSON.stringify(currentUser));
             
-            alert("Login successful!");
+            showToast("Login successful!");
             updateUserDisplay();
+            updateReferralLink();
             showPage('dashboard-page');
         }
         
@@ -1338,7 +1397,7 @@
         function logout() {
             currentUser = null;
             localStorage.removeItem('fxchris_current_user');
-            alert("You have been logged out.");
+            showToast("You have been logged out.");
             showPage('welcome-page');
         }
         
@@ -1363,12 +1422,12 @@
                     // Update the database
                     localStorage.setItem('fxchris_users', JSON.stringify(allUsers));
                     
-                    alert("Referral applied successfully! $0.04 has been added to your balance.");
+                    showToast("Referral applied successfully! $0.04 has been added to your balance.");
                     return;
                 }
             }
             
-            alert("Invalid referral code. Please check and try again.");
+            showToast("Invalid referral code. Please check and try again.");
         }
         
         // Change password
@@ -1379,9 +1438,9 @@
                 allUsers[currentUser.email].password = newPassword;
                 localStorage.setItem('fxchris_users', JSON.stringify(allUsers));
                 localStorage.setItem('fxchris_current_user', JSON.stringify(currentUser));
-                alert("Password changed successfully!");
+                showToast("Password changed successfully!");
             } else {
-                alert("Password must be at least 6 characters long");
+                showToast("Password must be at least 6 characters long");
             }
         }
         
@@ -1393,31 +1452,34 @@
         
         // Request withdrawal
         function requestWithdrawal() {
-            alert("Please message +2348115975301 on WhatsApp for withdrawal. Include your username and a screenshot for verification.");
+            showToast("Please message +2348115975301 on WhatsApp for withdrawal. Include your username and a screenshot for verification.");
         }
         
         // Copy referral link
         function copyReferralLink() {
             const refLink = document.getElementById('ref-link');
             refLink.select();
+            refLink.setSelectionRange(0, 99999); // For mobile devices
             document.execCommand('copy');
-            alert("Referral link copied to clipboard!");
+            showToast("Referral link copied to clipboard!");
         }
         
         // Share on WhatsApp
         function shareOnWhatsApp() {
-            const message = `Join FX Chris for 90% profit trading signals! Use my referral link: https://fxchris.com/ref/${currentUser.referralCode}`;
+            const message = `Join FX Chris for 90% profit trading signals! Use my referral link: ${document.getElementById('ref-link').value}`;
             window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
         }
         
         // Share on Facebook
         function shareOnFacebook() {
-            alert("Facebook sharing would be implemented here");
+            const url = encodeURIComponent(document.getElementById('ref-link').value);
+            window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
         }
         
         // Share on Telegram
         function shareOnTelegram() {
-            alert("Telegram sharing would be implemented here");
+            const message = encodeURIComponent(`Join FX Chris for 90% profit trading signals! Use my referral link: ${document.getElementById('ref-link').value}`);
+            window.open(`https://t.me/share/url?url=&text=${message}`, '_blank');
         }
         
         // Open WhatsApp
